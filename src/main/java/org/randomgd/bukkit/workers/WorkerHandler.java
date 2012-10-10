@@ -1,10 +1,11 @@
 package org.randomgd.bukkit.workers;
 
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,6 +30,7 @@ import org.bukkit.event.world.WorldSaveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
+
 import org.randomgd.bukkit.workers.common.Ring;
 import org.randomgd.bukkit.workers.common.Worker;
 import org.randomgd.bukkit.workers.info.BlacksmithInfo;
@@ -41,6 +43,9 @@ import org.randomgd.bukkit.workers.info.WorkerInfo;
 import org.randomgd.bukkit.workers.util.Configuration;
 import org.randomgd.bukkit.workers.util.GeneralInformation;
 import org.randomgd.bukkit.workers.util.WorkerCreator;
+
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
 
 /**
  * Plugin entry point.
@@ -136,8 +141,15 @@ public class WorkerHandler extends JavaPlugin implements Listener {
 	private Set<Entity> entities = new HashSet<Entity>();
 
 	/**
+	 * Gson instance.
+	 */
+
+	private Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+	/**
 	 * Last saving date-time.
 	 */
+
 	private long lastSave;
 
 	/**
@@ -232,25 +244,31 @@ public class WorkerHandler extends JavaPlugin implements Listener {
 		}
 		if (directory.exists() && directory.isDirectory()) {
 			// We can work now.
-			String path = String.format("%s%cworkers.dat", directory.getPath(),
+			String path = String.format("%s%cworkers.json", directory.getPath(),
 					File.separatorChar);
 			File dataFile = new File(path);
 			if (dataFile.exists() && dataFile.canRead() && dataFile.isFile()) {
+				BufferedReader reader = null;
 				try {
-					ObjectInputStream input = new ObjectInputStream(
-							new FileInputStream(dataFile));
-					Object result = input.readObject();
-					// Type erasure, all that stuff ... not good ... noooot
-					// good.
-					input.close();
-					workerStack = (Map<UUID, WorkerInfo>) result;
+					reader = new BufferedReader(new FileReader(dataFile));
+					Type type = new TypeToken<Map<UUID, WorkerInfo>>() {
+					}.getType();
+					workerStack = gson.fromJson(reader, type);
 				} catch (Exception ex) {
 					// Ouch ...
 					System.out
 							.println("Can't load informations about our fellow workers");
 					ex.printStackTrace();
+				} finally {
+					try {
+						reader.close();
+					} catch (IOException e) {
+						// All the way across the sky
+						e.printStackTrace();
+					}
 				}
 			}
+
 		}
 	}
 
@@ -273,16 +291,16 @@ public class WorkerHandler extends JavaPlugin implements Listener {
 		}
 		if (directory.exists() && directory.isDirectory()) {
 			// We can work now.
-			String path = String.format("%s%cworkers.dat", directory.getPath(),
+			String path = String.format("%s%cworkers.json", directory.getPath(),
 					File.separatorChar);
 			File dataFile = new File(path);
 			try {
 				if (!dataFile.exists()) {
 					dataFile.createNewFile();
 				}
-				ObjectOutputStream output = new ObjectOutputStream(
-						new FileOutputStream(dataFile));
-				output.writeObject(workerStack);
+				FileWriter output =
+						new FileWriter(dataFile);
+				output.write(gson.toJson(workerStack));
 				output.flush();
 				output.close();
 				System.out.println("Villagers' data serialized.");
